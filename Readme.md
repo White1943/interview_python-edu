@@ -13,6 +13,7 @@
   - [8 字符串格式化:%和.format](#8-字符串格式化和format)
   - [9 迭代器和生成器](#9-迭代器和生成器)
   - [10 `*args` and `**kwargs`](#10-args-and-kwargs)
+  - [**yang:** for count, thing in enumerate(args): 这一行，每次循环会同时得到当前元素的索引（从0开始）和对应的值。所以 count 就是当前元素在 args 里的位置（index），thing 是对应的值](#yang-for-count-thing-in-enumerateargs-这一行每次循环会同时得到当前元素的索引从0开始和对应的值所以-count-就是当前元素在-args-里的位置indexthing-是对应的值)
   - [11 面向切面编程AOP和装饰器](#11-面向切面编程aop和装饰器)
   - [12 鸭子类型](#12-鸭子类型)
   - [13 Python中重载](#13-python中重载)
@@ -30,6 +31,11 @@
   - [21 lambda函数](#21-lambda函数)
   - [22 Python函数式编程](#22-python函数式编程)
   - [23 Python里的拷贝](#23-python里的拷贝)
+    - [浅拷贝的本质](#浅拷贝的本质)
+      - [a. 增加/删除最外层元素](#a-增加删除最外层元素)
+      - [b. 修改最外层元素](#b-修改最外层元素)
+      - [c. 修改“可变子对象”内部的内容](#c-修改可变子对象内部的内容)
+      - [d. 替换“可变子对象”本身](#d-替换可变子对象本身)
   - [24 Python垃圾回收机制](#24-python垃圾回收机制)
     - [1 引用计数](#1-引用计数)
     - [2 标记-清除机制](#2-标记-清除机制)
@@ -189,6 +195,73 @@ print(a)  # [1]
 ## 2 Python中的元类(metaclass)
 
 这个非常的不常用,但是像ORM这种复杂的结构还是会需要的,详情请看:http://stackoverflow.com/questions/100003/what-is-a-metaclass-in-python
+<details>
+<summary>Python中的元类(metaclass)详解</summary>
+
+在Python中，元类(metaclass)是创建类的"类"。就像类是创建对象的模板一样，元类是创建类的模板。
+
+**基本概念**： Python中的一切都是对象，包括类本身。当我们定义一个类时，实际上是创建了一个类对象。而这个类对象是由元类创建的，默认情况下是由`type`元类创建的。
+
+---
+
+**元类在ORM（如Flask中的SQLAlchemy）中的应用：**
+
+在ORM框架中，元类常用于自动收集模型类的字段信息、生成数据库表结构等。以Flask-SQLAlchemy为例，ORM会通过元类自动把你定义的模型类的属性（如Column、Integer等）收集起来，生成对应的数据库表结构。
+
+下面是一个简化的例子，演示如何用元类实现类似的功能：
+
+```python
+# 定义一个简单的元类示例
+class ModelMetaclass(type):
+    def __new__(cls, name, bases, attrs):
+        # 收集所有的字段
+        fields = {}
+        for key, value in attrs.items():
+            if isinstance(value, Field):
+                fields[key] = value
+        
+        # 把收集到的字段保存到类的属性中
+        attrs['__fields__'] = fields
+        return type.__new__(cls, name, bases, attrs)
+
+# 定义字段基类
+class Field:
+    def __init__(self, name, column_type):
+        self.name = name
+        self.column_type = column_type
+
+# 定义具体字段类型
+class StringField(Field):
+    def __init__(self, name):
+        super().__init__(name, 'varchar(100)')
+
+class IntegerField(Field):
+    def __init__(self, name):
+        super().__init__(name, 'bigint')
+
+# 定义Model基类
+class Model(metaclass=ModelMetaclass):
+    def __init__(self, **kw):
+        super().__init__()
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+# 使用示例
+class User(Model):
+    # 定义类的属性到字段的映射
+    id = IntegerField('id')
+    name = StringField('username')
+    email = StringField('email')
+    password = StringField('password')
+
+# 创建实例
+u = User(id=12345, name='Michael', email='test@orm.org', password='my-pwd')
+# 可以通过__fields__属性获取所有字段信息
+print(User.__fields__)
+
+```
+
+</details>
 
 ## 3 @staticmethod和@classmethod
 
@@ -409,6 +482,8 @@ print(f"{name}的年龄是{age}岁！")    #小明的年龄是20岁！
 2. cabbage
 ```
 
+**yang:** for count, thing in enumerate(args): 这一行，每次循环会同时得到当前元素的索引（从0开始）和对应的值。所以 count 就是当前元素在 args 里的位置（index），thing 是对应的值
+---
 相似的,`**kwargs`允许你使用没有事先定义的参数名:
 
 ```python
@@ -749,6 +824,24 @@ d =  [1, 2, 3, 4, ['a', 'b']]
 
 **深拷贝：和浅拷贝对应，深拷贝拷贝了对象的所有元素，包括多层嵌套的元素。深拷贝出来的对象是一个全新的对象，不再与原来的对象有任何关联。**
 
+Yang:
+### 浅拷贝的本质
+浅拷贝会创建一个新的最外层容器（比如新的列表），
+但容器里的元素（包括子对象、子列表等）只是引用原来的对象，并没有复制。
+#### a. 增加/删除最外层元素
+a.append(5) 或 a.pop()
+只会影响 a、b，不会影响 c，因为 c 的最外层列表和 a 已经不是同一个对象了。
+#### b. 修改最外层元素
+a[0] = 100
+只会影响 a，不会影响 c，因为这只是把 a 的某个位置指向了新的对象。
+#### c. 修改“可变子对象”内部的内容
+a[4].append('c')
+这会影响 a 和 c，因为 a[4] 和 c[4] 指向的是**同一个子列表对象**。 list对象是可变类型。
+#### d. 替换“可变子对象”本身
+a[4] = ['x', 'y']
+只会影响 a、b，不会影响 c，因为这只是把 a 的第4个元素指向了新的列表，c[4] 还是原来的子列表。
+
+---
 ## 24 Python垃圾回收机制
 
 Python GC主要使用引用计数（reference counting）来跟踪和回收垃圾。在引用计数的基础上，通过“标记-清除”（mark and sweep）解决容器对象可能产生的循环引用问题，通过“分代回收”（generation collection）以空间换时间的方法提高垃圾回收效率。
@@ -780,10 +873,25 @@ Python默认定义了三代对象集合，索引数越大，对象存活时间�
 举例：
 当某些内存块M经过了3次垃圾收集的清洗之后还存活时，我们就将内存块M划到一个集合A中去，而新分配的内存都划分到集合B中去。当垃圾收集开始工作时，大多数情况都只对集合B进行垃圾回收，而对集合A进行垃圾回收要隔相当长一段时间后才进行，这就使得垃圾收集机制需要处理的内存少了，效率自然就提高了。在这个过程中，集合B中的某些内存块由于存活时间长而会被转移到集合A中，当然，集合A中实际上也存在一些垃圾，这些垃圾的回收会因为这种分代的机制而被延迟。
 
+---
+
 ## 25 Python的List
 
 推荐: http://www.jianshu.com/p/J4U6rR
 
+Yang:  我们能看到 Python 设计者的苦心。在需要的时候扩容,但又不允许过度的浪费,适当的内存回收是非常必要的。
+
+这个确定调整后的空间大小算法很有意思。
+调整后大小 (new_allocated) = 新元素数量 (newsize) + 预留空间 (new_allocated)
+调整后的空间肯定能存储 newsize 个元素。要关注的是预留空间的增长状况。
+将预留算法改成 Python 版就更清楚了:(newsize // 8) + (newsize < 9 and 3 or 6)。
+当 newsize >= allocated,自然按照这个新的长度 "扩容" 内存。
+而如果 newsize < allocated,且利用率低于一半呢?
+allocated    newsize       new_size + new_allocated
+10           4             4 + 3
+20           9             9 + 7
+很显然,这个新长度小于原来的已分配空间长度,自然会导致 realloc 收缩内存。(不容易啊)
+引自《深入Python编程》
 ## 26 Python的is
 
 is是对比地址,==是对比值
@@ -962,7 +1070,7 @@ Bulid过程可以分解为4个步骤:预处理(Prepressing), 编译(Compilation)
 ### Redis是什么？
 
 1. 是一个完全开源免费的key-value内存数据库 
-2. 通常被认为是一个数据结构服务器，主要是因为其有着丰富的数据结构 strings、map、 list、sets、 sorted sets
+2. 通常被认为是一个数据结构服务器，主要是因为其有着丰富的数据结构 strings 、map、 list、sets、 sorted sets
 
 ### Redis数据库
 
@@ -1165,7 +1273,8 @@ WSGI, Web Server Gateway Interface，是Python应用程序或框架和Web服务�
 
 ## 17 c10k问题
 
-所谓c10k问题，指的是服务器同时支持成千上万个客户端的问题，也就是concurrent 10 000 connection（这也是c10k这个名字的由来）。
+所谓c10k问题，指的是服务器同时支持成千上万个客户端的问题，
+也就是concurrent 10 000 connection（这也是c10k这个名字的由来）。
 推荐: https://my.oschina.net/xianggao/blog/664275
 
 ## 18 socket
